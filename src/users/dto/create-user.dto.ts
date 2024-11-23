@@ -5,10 +5,12 @@ import {
   MinLength,
   Matches,
   IsOptional,
+  IsEnum,
 } from 'class-validator';
+import { Permission } from 'src/auth/permissions.enum';
 
 const passwordRegEx =
-  /^(?=.*[a-z])(?=.*[A-Z])(?=.*d)(?=.*[@$!%*?&])[A-Za-zd@$!%*?&]{8,20}$/;
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,20}$/;
 
 export class CreateUserDto {
   @IsNotEmpty()
@@ -30,4 +32,12 @@ export class CreateUserDto {
 
   @IsOptional()
   profilePictureUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  role?: string;
+
+  @IsOptional()
+  @IsEnum(Permission, { each: true, message: 'Permesso non valido' })
+  permissions?: Permission[];
 }

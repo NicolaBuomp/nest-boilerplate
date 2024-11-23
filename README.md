@@ -1,99 +1,103 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# NestJS Boilerplate Readme
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+## Introduzione
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Questo progetto è un boilerplate per un'applicazione NestJS che include autenticazione, gestione degli utenti e un sistema di ruoli e permessi granulari.
 
-## Description
+### Struttura del Progetto
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- **Autenticazione**: Sistema di autenticazione basato su JSON Web Tokens (JWT), che include access token e refresh token per garantire una migliore gestione delle sessioni.
+- **Autorizzazione**: Sistema di ruoli e permessi per gestire l'accesso alle risorse dell'applicazione in modo granulare.
+- **Gestione Utenti**: CRUD per gli utenti con validazione dei dati e gestione dei permessi.
+- **Gestione Errori**: Filtro di eccezione globale e middleware di logging per una gestione coerente degli errori.
 
-## Project setup
+## Funzionalità Implementate
 
-```bash
-$ npm install
-```
+### 1. Autenticazione e Autorizzazione
 
-## Compile and run the project
+- **JWT Access Token e Refresh Token**: Gli utenti ricevono un `access_token` per operazioni a breve termine e un `refresh_token` per estendere la sessione senza dover riloggare frequentemente.
+  - **Endpoint per Registrazione**: Permette di registrare nuovi utenti, controllando se l'email è già in uso.
+  - **Endpoint per Login**: Fornisce access token e refresh token per gestire l'autenticazione.
+  - **Endpoint per Refresh Token**: Genera un nuovo access token utilizzando il refresh token.
+  - **Logout**: Rimuove il refresh token salvato dall'utente per invalidare la sessione.
 
-```bash
-# development
-$ npm run start
+### 2. Sistema di Ruoli e Permessi
 
-# watch mode
-$ npm run start:dev
+- **Ruoli**: Attualmente sono presenti ruoli come `admin` e `user`. Ogni ruolo ha permessi predefiniti.
+- **Permessi Granulari**: Ogni ruolo ha una lista di permessi specifici, come `CREATE_RESOURCE`, `UPDATE_RESOURCE`, `DELETE_RESOURCE`, `VIEW_RESOURCE`, ecc.
+  - **Permessi Definiti tramite Enum**: I permessi sono definiti in un enum per garantire coerenza e facilità di gestione.
+  - **Decoratori e Guard**: Implementati decoratori (`@Permissions()`) e guard (`PermissionsGuard`) per proteggere gli endpoint in base ai permessi richiesti.
 
-# production mode
-$ npm run start:prod
-```
+### 3. Gestione degli Utenti
 
-## Run tests
+- **CRUD per Utenti**: Endpoint per creare, visualizzare, aggiornare e gestire gli utenti.
+- **Validazione degli Input**: I dati in ingresso per la registrazione e l'aggiornamento degli utenti sono validati tramite DTO (`CreateUserDto`).
+- **Hashing delle Password**: Le password vengono hashate usando `bcrypt` prima di essere salvate nel database.
 
-```bash
-# unit tests
-$ npm run test
+### 4. Gestione degli Errori e Logging
 
-# e2e tests
-$ npm run test:e2e
+- **Filtro di Eccezione Globale**: Implementato un filtro globale (`AllExceptionsFilter`) per catturare e gestire tutte le eccezioni in un unico punto, garantendo risposte coerenti.
+- **Middleware di Logging**: Un middleware (`LoggerMiddleware`) registra tutte le richieste HTTP, fornendo dettagli utili per il debugging.
 
-# test coverage
-$ npm run test:cov
-```
+## Endpoint Disponibili
 
-## Deployment
+### Autenticazione
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+- **POST /api/auth/register**: Registra un nuovo utente.
+- **POST /api/auth/login**: Effettua il login dell'utente e restituisce access e refresh token.
+- **POST /api/auth/refresh**: Rigenera un access token utilizzando il refresh token.
+- **POST /api/auth/logout**: Effettua il logout dell'utente.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### Utenti
 
-```bash
-$ npm install -g mau
-$ mau deploy
-```
+- **POST /api/users/create-user**: Crea un nuovo utente (protetto da permessi).
+- **GET /api/users**: Ottiene la lista di tutti gli utenti (protetto da permessi).
+- **GET /api/users/:id**: Ottiene le informazioni di un singolo utente (protetto da permessi).
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Configurazione
 
-## Resources
+### Variabili d'Ambiente
 
-Check out a few resources that may come in handy when working with NestJS:
+Le variabili d'ambiente utilizzate includono:
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+- **`DB_HOST`**: Host del database.
+- **`DB_PORT`**: Porta del database.
+- **`DB_USERNAME`**: Username per il database.
+- **`DB_PASSWORD`**: Password per il database.
+- **`DB_NAME`**: Nome del database.
+- **`JWT_SECRET`**: Segreto per firmare i token JWT.
 
-## Support
+### Installazione
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+1. Clona il repository:
+   ```bash
+   git clone <repository-url>
+   ```
+2. Installa le dipendenze:
+   ```bash
+   npm install
+   ```
+3. Crea un file `.env` con le variabili d'ambiente necessarie.
+4. Avvia il server:
+   ```bash
+   npm run start:dev
+   ```
 
-## Stay in touch
+## Tecnologie Utilizzate
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+- **NestJS**: Framework Node.js per applicazioni lato server.
+- **TypeORM**: ORM per interagire con il database.
+- **PostgreSQL**: Database relazionale utilizzato.
+- **JWT**: Per la gestione dell'autenticazione e delle sessioni.
 
-## License
+## Prossimi Passi
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- **Gestione delle Email**: Implementare la verifica email e il reset della password.
+- **Test Automatizzati**: Aggiungere test unitari e di integrazione per i servizi e i controller.
+- **Health Check e Monitoraggio**: Aggiungere un endpoint `/health` e strumenti di monitoraggio come Prometheus o Grafana.
+
+## Conclusioni
+
+Questo boilerplate fornisce una solida base per sviluppare applicazioni NestJS con autenticazione e autorizzazione avanzate. È progettato per essere facilmente espandibile e adattabile a nuovi requisiti.
+
+Sentiti libero di contribuire o segnalare problemi aprendo una issue su GitHub.

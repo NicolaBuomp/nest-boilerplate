@@ -1,3 +1,4 @@
+import { Permission } from 'src/auth/permissions.enum';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -25,9 +26,14 @@ export class User {
 
   @Column({ type: 'varchar', nullable: true, default: 'user' })
   role: string;
+  @Column('simple-array', { nullable: true })
+  permissions: Permission[];
 
   @Column({ type: 'varchar', nullable: true })
   profilePictureUrl?: string;
+
+  @Column({ type: 'text', nullable: true })
+  refreshToken?: string;
 
   @CreateDateColumn()
   createdAt: Date;
