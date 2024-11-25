@@ -14,13 +14,25 @@ export class AuthController {
   }
 
   @Get('verify-email')
-  async verifyEmail(@Query('token') token: string) {
+  async verifyEmail(@Query('email') email: string, @Query('otp') otp: string) {
     try {
-      const payload = await this.authService.verifyToken(token);
-      await this.authService.markEmailAsVerified(payload.sub);
+      await this.authService.verifyOtp(email, otp);
       return { success: true, message: 'Email verificata con successo' };
     } catch (e) {
-      return { success: false, message: 'Token non valido o scaduto' };
+      return { success: false, message: e.message };
+    }
+  }
+
+  @Post('resend-verification-email')
+  async resendVerificationEmail(@Body('email') email: string) {
+    try {
+      await this.authService.resendVerificationEmail(email);
+      return {
+        success: true,
+        message: 'Email di verifica reinviata con successo',
+      };
+    } catch (e) {
+      return { success: false, message: e.message };
     }
   }
 

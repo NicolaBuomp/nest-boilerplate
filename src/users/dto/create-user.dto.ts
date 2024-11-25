@@ -40,4 +40,8 @@ export class CreateUserDto {
   @IsOptional()
   @IsEnum(Permission, { each: true, message: 'Permesso non valido' })
   permissions?: Permission[];
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
 }

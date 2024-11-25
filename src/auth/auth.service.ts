@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from 'src/users/dto/create-user.dto';
@@ -6,6 +11,7 @@ import { User } from 'src/users/entities/user.entity';
 import { UsersService } from 'src/users/users.service';
 import { ConfigService } from '@nestjs/config';
 import { EmailService } from 'src/email/email.service';
+import { generateOtp, validateOtp } from 'src/helpers/otp.helper';
 
 @Injectable()
 export class AuthService {
@@ -23,10 +29,12 @@ export class AuthService {
       createUserDto.email,
     );
     if (existingUser && existingUser.isEmailVerified) {
-      throw new UnauthorizedException('Email già in uso');
+      throw new UnauthorizedException(
+        `Email già in uso. Se hai già registrato un account, accedi oppure verifica l'email utilizzando il link ricevuto.`,
+      );
     } else if (existingUser && !existingUser.isEmailVerified) {
       throw new UnauthorizedException(
-        'Email già in uso, ma non verificata! Sei pregato di verificare la tua email.',
+        'Email già in uso, ma non verificata! Clicca qui per ricevere un nuovo codice di verifica.',
       );
     }
 
@@ -36,17 +44,57 @@ export class AuthService {
       password: hashedPassword,
     });
 
-    // Genera il token di verifica e invia l'email di verifica
-    const verificationToken = this.jwtService.sign(
-      { email: user.email, sub: user.id },
-      { expiresIn: '1d' },
-    );
-    await this.emailService.sendVerificationEmail(
-      user.email,
-      verificationToken,
-    );
+    const { otp, hashedOtp } = await generateOtp();
+    user.verificationOtp = hashedOtp;
+    user.otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
+    await this.usersService.update(user.id, {
+      verificationOtp: user.verificationOtp,
+      otpExpiry: user.otpExpiry,
+      otpAttempts: 0,
+      otpRequestCount: 0,
+    });
+
+    await this.emailService.sendVerificationOtp(user.email, otp);
 
     return user;
+  }
+
+  async verifyOtp(email: string, otp: string): Promise<void> {
+    const user = await this.usersService.findOneByEmail(email);
+    if (!user) {
+      throw new UnauthorizedException('Utente non trovato');
+    }
+    if (user.otpAttempts >= 3) {
+      throw new UnauthorizedException(
+        'Numero massimo di tentativi superato. Richiedi un nuovo codice OTP.',
+      );
+    }
+    if (
+      !user.verificationOtp ||
+      !user.otpExpiry ||
+      user.otpExpiry < new Date()
+    ) {
+      throw new BadRequestException('OTP scaduto, richiedi un nuovo codice');
+    }
+    const isOtpValid = await validateOtp(otp, user.verificationOtp);
+    if (!isOtpValid) {
+      user.otpAttempts += 1;
+      await this.usersService.update(user.id, {
+        otpAttempts: user.otpAttempts,
+      });
+      throw new UnauthorizedException('OTP non valido');
+    }
+
+    user.isEmailVerified = true;
+    user.verificationOtp = null;
+    user.otpExpiry = null;
+    user.otpAttempts = 0;
+    await this.usersService.update(user.id, {
+      isEmailVerified: true,
+      verificationOtp: null,
+      otpExpiry: null,
+      otpAttempts: 0,
+    });
   }
 
   async login(
@@ -55,7 +103,15 @@ export class AuthService {
   ): Promise<{ access_token: string; refresh_token: string }> {
     const user = await this.usersService.findOneByEmail(email);
     if (!user || !(await bcrypt.compare(password, user.password))) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException(
+        'Email o password non corretti. Verifica i dati inseriti e riprova.',
+      );
+    }
+
+    if (!user.isEmailVerified) {
+      throw new UnauthorizedException(
+        'Questo account non è ancora verificato. Clicca qui per inviare un nuovo codice OTP alla tua mail e verificare il tuo account!',
+      );
     }
 
     const payload = { email: user.email, sub: user.id };
@@ -106,25 +162,45 @@ export class AuthService {
     }
   }
 
-  async verifyToken(token: string): Promise<any> {
-    try {
-      const secret = this.configService.get<string>('JWT_SECRET');
-      return this.jwtService.verify(token, { secret });
-    } catch (e) {
-      throw new UnauthorizedException('Token non valido o scaduto');
-    }
+  async logout(userId: string): Promise<void> {
+    await this.usersService.update(userId, { refreshToken: null });
   }
 
-  async markEmailAsVerified(userId: string): Promise<void> {
-    const user = await this.usersService.findOne(userId);
+  async resendVerificationEmail(email: string): Promise<void> {
+    const user = await this.usersService.findOneByEmail(email);
     if (!user) {
       throw new UnauthorizedException('Utente non trovato');
     }
-    user.isEmailVerified = true;
-    await this.usersService.update(user.id, { isEmailVerified: true });
-  }
+    if (user.isEmailVerified) {
+      throw new UnauthorizedException('Email già verificata');
+    }
 
-  async logout(userId: string): Promise<void> {
-    await this.usersService.update(userId, { refreshToken: null });
+    const now = new Date();
+    if (user.otpRequestResetTime && user.otpRequestResetTime < now) {
+      user.otpRequestCount = 0;
+    }
+
+    if (user.otpRequestCount >= 3) {
+      throw new BadRequestException(
+        `Hai superato il numero massimo di richieste OTP. Attendi un'ora prima di richiedere un nuovo codice.`,
+      );
+    }
+
+    user.otpRequestCount += 1;
+    user.otpRequestResetTime = new Date(now.getTime() + 60 * 60 * 1000); // Reset dopo un'ora
+
+    const { otp, hashedOtp } = await generateOtp();
+    user.verificationOtp = hashedOtp;
+    user.otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
+    user.otpAttempts = 0;
+    await this.usersService.update(user.id, {
+      verificationOtp: user.verificationOtp,
+      otpExpiry: user.otpExpiry,
+      otpAttempts: user.otpAttempts,
+      otpRequestCount: user.otpRequestCount,
+      otpRequestResetTime: user.otpRequestResetTime,
+    });
+
+    await this.emailService.sendVerificationOtp(user.email, otp);
   }
 }

@@ -8,20 +8,37 @@ export class EmailService {
 
   constructor() {
     this.transporter = nodemailer.createTransport({
-      host: 'smtp.sendgrid.net', // Server SMTP di SendGrid
-      port: 587, // Porta SMTP di SendGrid (587 per TLS)
-      secure: false, // Usa false per STARTTLS
+      host: 'smtp.sendgrid.net',
+      port: 587,
+      secure: false,
       auth: {
-        user: 'apikey', // Username fisso per SendGrid SMTP
-        pass: process.env.SENDGRID_API_KEY, // La chiave API di SendGrid
+        user: 'apikey',
+        pass: process.env.SENDGRID_API_KEY,
       },
     });
+  }
+
+  async sendVerificationOtp(to: string, otp: string) {
+    const mailOptions = {
+      from: `"Nest Boilerplate" <${process.env.EMAIL_USER}>`,
+      to,
+      subject: 'Verifica la tua email',
+      html: `<p>Grazie per esserti registrato. Usa il seguente codice OTP per verificare il tuo indirizzo email: <strong>${otp}</strong></p>`,
+    };
+
+    try {
+      this.logger.log(`Tentativo di invio OTP di verifica a ${to}`);
+      const info = await this.transporter.sendMail(mailOptions);
+      this.logger.log(`OTP di verifica inviato con successo: ${info.response}`);
+    } catch (error) {
+      this.logger.error(`Errore durante l'invio dell'OTP a ${to}`, error.stack);
+    }
   }
 
   async sendVerificationEmail(to: string, token: string) {
     const verificationUrl = `${process.env.APP_URL}/verify-email?token=${token}`;
     const mailOptions = {
-      from: `"Nest Boilerplate" <${process.env.EMAIL_USER}>`, // L'indirizzo email deve essere verificato su SendGrid
+      from: `"Nest Boilerplate" <${process.env.EMAIL_USER}>`,
       to,
       subject: 'Verifica la tua email',
       html: `<p>Grazie per esserti registrato. Clicca sul seguente link per verificare il tuo indirizzo email: <a href="${verificationUrl}">Verifica Email</a></p>`,

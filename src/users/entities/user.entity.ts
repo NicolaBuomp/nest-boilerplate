@@ -26,6 +26,7 @@ export class User {
 
   @Column({ type: 'varchar', nullable: true, default: 'user' })
   role: string;
+
   @Column('simple-array', { nullable: true })
   permissions: Permission[];
 
@@ -37,6 +38,24 @@ export class User {
 
   @Column({ type: 'text', nullable: true })
   refreshToken?: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  verificationOtp?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  otpExpiry?: Date;
+
+  @Column({ type: 'int', nullable: true })
+  otpAttempts?: number;
+
+  @Column({ type: 'int', default: 0 })
+  otpRequestCount?: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  otpRequestResetTime?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lockedUntil?: Date;
 
   @CreateDateColumn()
   createdAt: Date;
