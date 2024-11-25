@@ -5,6 +5,7 @@ import { CreateUserDto } from 'src/users/dto/create-user.dto';
 import { User } from 'src/users/entities/user.entity';
 import { UsersService } from 'src/users/users.service';
 import { ConfigService } from '@nestjs/config';
+import { EmailService } from 'src/email/email.service';
 
 @Injectable()
 export class AuthService {
@@ -14,21 +15,38 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly emailService: EmailService,
   ) {}
 
   async register(createUserDto: CreateUserDto): Promise<User> {
     const existingUser = await this.usersService.findOneByEmail(
       createUserDto.email,
     );
-    if (existingUser) {
+    if (existingUser && existingUser.isEmailVerified) {
       throw new UnauthorizedException('Email già in uso');
+    } else if (existingUser && !existingUser.isEmailVerified) {
+      throw new UnauthorizedException(
+        'Email già in uso, ma non verificata! Sei pregato di verificare la tua email.',
+      );
     }
 
     const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
-    return await this.usersService.create({
+    const user = await this.usersService.create({
       ...createUserDto,
       password: hashedPassword,
     });
+
+    // Genera il token di verifica e invia l'email di verifica
+    const verificationToken = this.jwtService.sign(
+      { email: user.email, sub: user.id },
+      { expiresIn: '1d' },
+    );
+    await this.emailService.sendVerificationEmail(
+      user.email,
+      verificationToken,
+    );
+
+    return user;
   }
 
   async login(
@@ -86,6 +104,24 @@ export class AuthService {
       this.logger.error('Invalid refresh token', e.stack);
       throw new UnauthorizedException('Invalid refresh token');
     }
+  }
+
+  async verifyToken(token: string): Promise<any> {
+    try {
+      const secret = this.configService.get<string>('JWT_SECRET');
+      return this.jwtService.verify(token, { secret });
+    } catch (e) {
+      throw new UnauthorizedException('Token non valido o scaduto');
+    }
+  }
+
+  async markEmailAsVerified(userId: string): Promise<void> {
+    const user = await this.usersService.findOne(userId);
+    if (!user) {
+      throw new UnauthorizedException('Utente non trovato');
+    }
+    user.isEmailVerified = true;
+    await this.usersService.update(user.id, { isEmailVerified: true });
   }
 
   async logout(userId: string): Promise<void> {

@@ -32,6 +32,9 @@ export class User {
   @Column({ type: 'varchar', nullable: true })
   profilePictureUrl?: string;
 
+  @Column({ type: 'boolean', default: false })
+  isEmailVerified: boolean;
+
   @Column({ type: 'text', nullable: true })
   refreshToken?: string;
 

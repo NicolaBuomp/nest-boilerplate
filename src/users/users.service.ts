@@ -16,6 +16,7 @@ export class UsersService {
   private assignPermissions(role: string): Permission[] {
     switch (role) {
       case 'admin':
+      case 'developer':
         return [
           Permission.CREATE_RESOURCE,
           Permission.UPDATE_RESOURCE,
@@ -60,5 +61,14 @@ export class UsersService {
     const user = await this.findOne(id);
     Object.assign(user, updateData);
     return this.userRepository.save(user);
+  }
+
+  async delete(id: string): Promise<void> {
+    const user = await this.findOne(id);
+    await this.userRepository.remove(user);
+  }
+
+  async deleteAll(): Promise<void> {
+    await this.userRepository.clear();
   }
 }
