@@ -12,6 +12,8 @@ import { UsersService } from 'src/users/users.service';
 import { ConfigService } from '@nestjs/config';
 import { EmailService } from 'src/email/email.service';
 import { generateOtp, validateOtp } from 'src/helpers/otp.helper';
+import { ERROR_MESSAGES } from 'src/helpers/error-message.helper';
+import { ResetPasswordDto } from 'src/users/dto/reset-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -54,7 +56,7 @@ export class AuthService {
       otpRequestCount: 0,
     });
 
-    await this.emailService.sendVerificationOtp(user.email, otp);
+    await this.emailService.sendVerificationOtp(user.email, user.name, otp);
 
     return user;
   }
@@ -62,38 +64,59 @@ export class AuthService {
   async verifyOtp(email: string, otp: string): Promise<void> {
     const user = await this.usersService.findOneByEmail(email);
     if (!user) {
-      throw new UnauthorizedException('Utente non trovato');
+      throw new UnauthorizedException(ERROR_MESSAGES.USER_NOT_FOUND);
     }
-    if (user.otpAttempts >= 3) {
+
+    // Verifica se l'account è bloccato
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
       throw new UnauthorizedException(
-        'Numero massimo di tentativi superato. Richiedi un nuovo codice OTP.',
+        `${ERROR_MESSAGES.ACCOUNT_LOCKED} Riprova tra ${Math.ceil(
+          (user.lockedUntil.getTime() - new Date().getTime()) / 60000,
+        )} minuti.`,
       );
     }
+
+    if (user.otpAttempts >= 3) {
+      // Blocca l'account per 30 minuti
+      user.lockedUntil = new Date(Date.now() + 30 * 60 * 1000);
+      await this.usersService.update(user.id, {
+        lockedUntil: user.lockedUntil,
+      });
+
+      // Invia una notifica all'utente
+      await this.emailService.sendAccountBlockedEmail(user.email, user.name);
+
+      throw new UnauthorizedException(ERROR_MESSAGES.ACCOUNT_LOCKED);
+    }
+
     if (
       !user.verificationOtp ||
       !user.otpExpiry ||
       user.otpExpiry < new Date()
     ) {
-      throw new BadRequestException('OTP scaduto, richiedi un nuovo codice');
+      throw new BadRequestException(ERROR_MESSAGES.OTP_EXPIRED);
     }
+
     const isOtpValid = await validateOtp(otp, user.verificationOtp);
     if (!isOtpValid) {
       user.otpAttempts += 1;
       await this.usersService.update(user.id, {
         otpAttempts: user.otpAttempts,
       });
-      throw new UnauthorizedException('OTP non valido');
+      throw new UnauthorizedException(ERROR_MESSAGES.INVALID_OTP);
     }
 
     user.isEmailVerified = true;
     user.verificationOtp = null;
     user.otpExpiry = null;
     user.otpAttempts = 0;
+    user.lockedUntil = null; // Sblocca l'account se la verifica è riuscita
     await this.usersService.update(user.id, {
       isEmailVerified: true,
       verificationOtp: null,
       otpExpiry: null,
       otpAttempts: 0,
+      lockedUntil: null,
     });
   }
 
@@ -169,10 +192,10 @@ export class AuthService {
   async resendVerificationEmail(email: string): Promise<void> {
     const user = await this.usersService.findOneByEmail(email);
     if (!user) {
-      throw new UnauthorizedException('Utente non trovato');
+      throw new UnauthorizedException(ERROR_MESSAGES.USER_NOT_FOUND);
     }
     if (user.isEmailVerified) {
-      throw new UnauthorizedException('Email già verificata');
+      throw new UnauthorizedException(ERROR_MESSAGES.EMAIL_ALREADY_VERIFIED);
     }
 
     const now = new Date();
@@ -181,13 +204,11 @@ export class AuthService {
     }
 
     if (user.otpRequestCount >= 3) {
-      throw new BadRequestException(
-        `Hai superato il numero massimo di richieste OTP. Attendi un'ora prima di richiedere un nuovo codice.`,
-      );
+      throw new BadRequestException(ERROR_MESSAGES.TOO_MANY_OTP_REQUESTS);
     }
 
     user.otpRequestCount += 1;
-    user.otpRequestResetTime = new Date(now.getTime() + 60 * 60 * 1000); // Reset dopo un'ora
+    user.otpRequestResetTime = new Date(now.getTime() + 60 * 60 * 1000);
 
     const { otp, hashedOtp } = await generateOtp();
     user.verificationOtp = hashedOtp;
@@ -201,6 +222,28 @@ export class AuthService {
       otpRequestResetTime: user.otpRequestResetTime,
     });
 
-    await this.emailService.sendVerificationOtp(user.email, otp);
+    await this.emailService.sendVerificationOtp(user.email, user.name, otp);
+  }
+
+  async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<void> {
+    const { token, newPassword } = resetPasswordDto;
+
+    try {
+      const secret = this.configService.get<string>('JWT_SECRET');
+      const payload = this.jwtService.verify(token, { secret });
+
+      const user = await this.usersService.findOneByEmail(payload.email);
+      if (!user) {
+        throw new UnauthorizedException('Utente non trovato.');
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await this.usersService.update(user.id, { password: hashedPassword });
+    } catch (e) {
+      this.logger.error('Errore durante il reset della password', e.stack);
+      throw new UnauthorizedException(
+        'Token non valido o scaduto. Richiedi nuovamente il reset della password.',
+      );
+    }
   }
 }

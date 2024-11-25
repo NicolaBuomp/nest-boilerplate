@@ -18,12 +18,16 @@ export class EmailService {
     });
   }
 
-  async sendVerificationOtp(to: string, otp: string) {
+  async sendVerificationOtp(to: string, name: string, otp: string) {
     const mailOptions = {
       from: `"Nest Boilerplate" <${process.env.EMAIL_USER}>`,
       to,
       subject: 'Verifica la tua email',
-      html: `<p>Grazie per esserti registrato. Usa il seguente codice OTP per verificare il tuo indirizzo email: <strong>${otp}</strong></p>`,
+      html: `
+      <p>Ciao ${name},</p>
+      <p>Grazie per esserti registrato. Usa il seguente codice OTP per verificare il tuo indirizzo email: <strong>${otp}</strong></p>
+      <p>Se non hai richiesto questa email, ti preghiamo di ignorarla. Se continui a ricevere queste email, contatta il nostro supporto.</p>
+    `,
     };
 
     try {
@@ -32,39 +36,23 @@ export class EmailService {
       this.logger.log(`OTP di verifica inviato con successo: ${info.response}`);
     } catch (error) {
       this.logger.error(`Errore durante l'invio dell'OTP a ${to}`, error.stack);
-    }
-  }
-
-  async sendVerificationEmail(to: string, token: string) {
-    const verificationUrl = `${process.env.APP_URL}/verify-email?token=${token}`;
-    const mailOptions = {
-      from: `"Nest Boilerplate" <${process.env.EMAIL_USER}>`,
-      to,
-      subject: 'Verifica la tua email',
-      html: `<p>Grazie per esserti registrato. Clicca sul seguente link per verificare il tuo indirizzo email: <a href="${verificationUrl}">Verifica Email</a></p>`,
-    };
-
-    try {
-      this.logger.log(`Tentativo di invio email di verifica a ${to}`);
-      const info = await this.transporter.sendMail(mailOptions);
-      this.logger.log(
-        `Email di verifica inviata con successo: ${info.response}`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `Errore durante l'invio dell'email a ${to}`,
-        error.stack,
+      throw new Error(
+        'Errore durante l’invio della email di verifica. Riprova più tardi.',
       );
     }
   }
 
-  async sendPasswordResetEmail(to: string, token: string) {
+  async sendPasswordResetEmail(to: string, name: string, token: string) {
     const resetUrl = `${process.env.APP_URL}/auth/reset-password?token=${token}`;
     const mailOptions = {
       from: `"Nest Boilerplate" <${process.env.EMAIL_USER}>`,
       to,
       subject: 'Reset della Password',
-      html: `<p>Hai richiesto un reset della password. Clicca sul seguente link per reimpostare la tua password: <a href="${resetUrl}">Reset Password</a></p>`,
+      html: `
+      <p>Ciao ${name},</p>
+      <p>Hai richiesto un reset della password. Clicca sul seguente link per reimpostare la tua password: <a href="${resetUrl}">Reset Password</a></p>
+      <p>Se non hai richiesto questa email, ti preghiamo di ignorarla. Se continui a ricevere queste email, contatta il nostro supporto.</p>
+    `,
     };
 
     try {
@@ -74,6 +62,35 @@ export class EmailService {
       this.logger.error(
         `Errore durante l'invio dell'email a ${to}`,
         error.stack,
+      );
+      throw new Error(
+        'Errore durante l’invio dell’email di reset della password. Riprova più tardi.',
+      );
+    }
+  }
+
+  async sendAccountBlockedEmail(to: string, name: string) {
+    const mailOptions = {
+      from: `"Nest Boilerplate" <${process.env.EMAIL_USER}>`,
+      to,
+      subject: 'Account bloccato per troppi tentativi di accesso',
+      html: `
+    <p>Ciao ${name},</p>
+    <p>Il tuo account è stato bloccato a causa di troppi tentativi di accesso falliti. Ti preghiamo di attendere 30 minuti e poi potrai riprovare.</p>
+    <p>Se non sei stato tu, ti consigliamo di contattare il nostro supporto.</p>
+  `,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Email di blocco account inviata a ${to}`);
+    } catch (error) {
+      this.logger.error(
+        `Errore durante l'invio dell'email di blocco a ${to}`,
+        error.stack,
+      );
+      throw new Error(
+        'Errore durante l’invio della notifica di blocco account.',
       );
     }
   }
